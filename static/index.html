@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SystemAssist — Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak]{display:none!important}
+    .scrollbar-thin::-webkit-scrollbar{width:5px}
+    .scrollbar-thin::-webkit-scrollbar-track{background:transparent}
+    .scrollbar-thin::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover{background:#475569}
+    #chat-messages{scroll-behavior:smooth}
+    .cat-ERROR{background:#ef444418;color:#f87171;border-color:#ef444440}
+    .cat-AUTH{background:#eab30818;color:#fbbf24;border-color:#eab30840}
+    .cat-CRUD{background:#3b82f618;color:#60a5fa;border-color:#3b82f640}
+    .cat-QUERY{background:#22c55e18;color:#4ade80;border-color:#22c55e40}
+    .cat-API{background:#a855f718;color:#c084fc;border-color:#a855f740}
+    .cat-SYSTEM{background:#64748b18;color:#94a3b8;border-color:#64748b40}
+    .drawer{transition:transform .25s cubic-bezier(.4,0,.2,1)}
+    .fade-in{animation:fadeIn .25s ease-out}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .bar-anim{transition:height .6s cubic-bezier(.4,0,.2,1)}
+    .stat-card{background:linear-gradient(135deg,rgba(30,41,59,.7),rgba(15,23,42,.85));transition:transform .2s,box-shadow .2s}
+    .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,.3)}
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen overflow-hidden" x-data="app()" x-init="init()" x-cloak>
+
+  <!-- ══ LOGIN SCREEN ════════════════════════════════════════════════ -->
+  <div x-show="!isAuthed"
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       class="min-h-screen flex items-center justify-center p-4 bg-slate-950">
+    <div class="w-full max-w-sm">
+      <!-- Brand -->
+      <div class="flex flex-col items-center mb-8">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-xl font-bold shadow-2xl shadow-blue-500/30 mb-4">SA</div>
+        <h1 class="text-2xl font-bold tracking-tight">SystemAssist</h1>
+        <p class="text-slate-400 text-sm mt-1">Admin Console v2.1</p>
+      </div>
+      <!-- Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+        <h2 class="text-base font-semibold mb-5 text-slate-200">Sign In</h2>
+        <!-- Error -->
+        <div x-show="authError" x-transition
+             class="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5"
+             x-text="authError"></div>
+        <!-- API URL -->
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">API URL</label>
+          <input type="url" x-model="apiUrl" placeholder="https://your-api.example.com"
+                 @keydown.enter="login()"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"/>
+        </div>
+        <!-- API Key -->
+        <div class="mb-6">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Admin API Key</label>
+          <input type="password" x-model="apiKey" placeholder="Enter your master API key"
+                 @keydown.enter="login()"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"/>
+        </div>
+        <!-- Button -->
+        <button @click="login()" :disabled="authLoading"
+                class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+          <svg x-show="authLoading" class="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <span x-text="authLoading ? 'Signing in…' : 'Sign In'"></span>
+        </button>
+      </div>
+      <p class="text-center text-slate-700 text-xs mt-5">SystemAssist · AI Log Intelligence Extension</p>
+    </div>
+  </div>
+
+  <!-- ══ MAIN APP ════════════════════════════════════════════════════ -->
+  <div x-show="isAuthed" class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Drawer backdrop -->
+    <div x-show="drawerOpen" @click="drawerOpen=false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"></div>
+
+    <!-- ── Offcanvas Drawer ──────────────────────────────────────── -->
+    <aside class="drawer fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 z-50 flex flex-col shadow-2xl"
+           :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'">
+      <!-- Drawer header -->
+      <div class="flex items-center justify-between px-4 h-14 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-xs font-bold shadow-lg shadow-blue-500/20">SA</div>
+          <div>
+            <div class="font-semibold text-sm leading-none">SystemAssist</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">Admin Console</div>
+          </div>
+        </div>
+        <button @click="drawerOpen=false"
+                class="text-slate-500 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Nav items -->
+      <nav class="flex-1 py-2 overflow-y-auto scrollbar-thin">
+        <template x-for="tab in tabs" :key="tab.id">
+          <button @click="activeTab=tab.id"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                  :class="activeTab===tab.id
+                    ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500 font-medium'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" :d="tab.icon"/>
+            </svg>
+            <span x-text="tab.label"></span>
+          </button>
+        </template>
+      </nav>
+      <!-- Drawer footer -->
+      <div class="border-t border-slate-800 p-3 shrink-0 space-y-1">
+        <div class="text-[11px] text-slate-600 truncate px-2 mb-2" x-text="apiUrl"></div>
+        <button @click="showSettings=true; drawerOpen=false"
+                class="w-full flex items-center gap-2.5 text-slate-400 hover:text-slate-200 text-xs py-2 px-2 rounded-lg hover:bg-slate-800/60 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          Settings
+        </button>
+        <button @click="logout()"
+                class="w-full flex items-center gap-2.5 text-red-400/80 hover:text-red-300 text-xs py-2 px-2 rounded-lg hover:bg-red-500/10 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          Sign Out
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── Top Navbar ──────────────────────────────────────────────── -->
+    <header class="h-14 bg-slate-900 border-b border-slate-800 flex items-center px-4 gap-3 shrink-0 relative z-30">
+      <!-- Hamburger -->
+      <button @click="drawerOpen=!drawerOpen"
+              class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition -ml-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <!-- Brand -->
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[10px] font-bold shadow-md shadow-blue-500/20">SA</div>
+        <span class="font-semibold text-sm hidden sm:inline">SystemAssist</span>
+      </div>
+      <!-- Breadcrumb divider -->
+      <svg class="w-3.5 h-3.5 text-slate-700 shrink-0 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+      <!-- Active tab label -->
+      <span class="text-sm text-slate-300 font-medium hidden sm:inline" x-text="tabs.find(t=>t.id===activeTab)?.label"></span>
+      <!-- Spacer -->
+      <div class="flex-1"></div>
+      <!-- Settings button -->
+      <button @click="showSettings=!showSettings"
+              class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition"
+              title="Connection Settings">
+        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </button>
+      <!-- Logout button -->
+      <button @click="logout()"
+              class="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition"
+              title="Sign Out">
+        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- ── Main Content ─────────────────────────────────────────────── -->
+    <main class="flex-1 overflow-y-auto scrollbar-thin">
+      <div class="max-w-5xl mx-auto px-4 py-6">
+
+        <!-- ── DASHBOARD ──────────────────────────────────────────── -->
+        <section x-show="activeTab==='dashboard'" class="fade-in space-y-5">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-slate-200">Dashboard</h2>
+            <button @click="loadDashboard()" class="text-xs text-slate-500 hover:text-slate-300 transition flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div x-show="dashLoading" class="flex items-center gap-2 text-sm text-slate-500 py-8 justify-center">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            Loading stats…
+          </div>
+          <template x-if="dashStats && !dashLoading">
+            <div class="space-y-5">
+              <!-- Stat cards -->
+              <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="stat-card rounded-xl p-4 border border-slate-800">
+                  <div class="text-xs text-slate-500 mb-1.5">Total Logs</div>
+                  <div class="text-2xl font-bold tabular-nums" x-text="dashStats.total_logs?.toLocaleString() ?? '—'"></div>
+                </div>
+                <div class="stat-card rounded-xl p-4 border border-slate-800">
+                  <div class="text-xs text-slate-500 mb-1.5">Unique Users</div>
+                  <div class="text-2xl font-bold tabular-nums" x-text="dashStats.unique_users?.toLocaleString() ?? '—'"></div>
+                </div>
+                <div class="stat-card rounded-xl p-4 border border-slate-800">
+                  <div class="text-xs text-slate-500 mb-1.5">Last 30 Days</div>
+                  <div class="text-2xl font-bold tabular-nums" x-text="dashStats.logs_last_30_days?.toLocaleString() ?? '—'"></div>
+                </div>
+                <div class="stat-card rounded-xl p-4 border border-slate-800">
+                  <div class="text-xs text-slate-500 mb-1.5">Error Rate</div>
+                  <div class="text-2xl font-bold tabular-nums" x-text="dashStats.error_rate != null ? dashStats.error_rate.toFixed(1)+'%' : '—'"></div>
+                </div>
+              </div>
+              <!-- Category breakdown -->
+              <div x-show="dashStats.by_category && Object.keys(dashStats.by_category||{}).length"
+                   class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">By Category</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <template x-for="[cat, cnt] in Object.entries(dashStats.by_category || {})" :key="cat">
+                    <div class="flex items-center justify-between rounded-lg px-3 py-2 border text-sm" :class="'cat-'+cat">
+                      <span x-text="cat" class="font-medium text-xs"></span>
+                      <span x-text="cnt.toLocaleString()" class="font-mono font-bold"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <!-- Timeline chart -->
+              <div x-show="dashStats.timeline?.length"
+                   class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Daily Activity (30 days)</h3>
+                <div class="flex items-end gap-0.5 h-20">
+                  <template x-for="point in dashStats.timeline" :key="point.date">
+                    <div class="flex-1 group relative flex flex-col justify-end">
+                      <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 text-xs text-slate-200 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-10"
+                           x-text="point.date + ': ' + point.count"></div>
+                      <div class="bar-anim w-full bg-blue-500/60 hover:bg-blue-400 rounded-sm cursor-default transition-colors"
+                           :style="'height:' + Math.max(3, (point.count / getTimelineMax() * 76)) + 'px'"></div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div x-show="!dashLoading && !dashStats" class="text-sm text-slate-600 text-center py-12">
+            No stats available. Check your connection.
+          </div>
+        </section>
+
+        <!-- ── AI CHAT ─────────────────────────────────────────────── -->
+        <section x-show="activeTab==='chat'" class="fade-in flex flex-col" style="height:calc(100vh - 9rem)">
+          <!-- User ID bar -->
+          <div class="flex items-center gap-2 mb-4 shrink-0">
+            <div class="flex-1">
+              <input x-model="userId" placeholder="User ID for context (required for chat)…"
+                     class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"/>
+            </div>
+            <button @click="save(); showToast('User ID saved')"
+                    class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl px-3 py-2.5 transition">
+              Save
+            </button>
+          </div>
+          <!-- Messages area -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto scrollbar-thin space-y-3 mb-4 px-1">
+            <template x-if="messages.length === 0">
+              <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-600">
+                <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <span class="text-sm">Ask anything about your system logs</span>
+              </div>
+            </template>
+            <template x-for="(msg, i) in messages" :key="i">
+              <div :class="msg.role==='user' ? 'flex justify-end' : 'flex justify-start'">
+                <div :class="msg.role==='user'
+                        ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm'
+                        : 'bg-slate-800 text-slate-200 rounded-2xl rounded-tl-sm'"
+                     class="max-w-[80%] px-4 py-2.5 text-sm leading-relaxed"
+                     x-text="msg.content"></div>
+              </div>
+            </template>
+            <!-- Typing indicator -->
+            <div x-show="chatLoading" class="flex justify-start">
+              <div class="bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+              </div>
+            </div>
+          </div>
+          <!-- Error -->
+          <div x-show="chatError" x-transition
+               class="mb-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 shrink-0"
+               x-text="chatError"></div>
+          <!-- Input bar -->
+          <div class="flex gap-2 shrink-0">
+            <input x-model="chatInput" @keydown.enter.prevent="sendChat()"
+                   placeholder="Message…"
+                   class="flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"/>
+            <button @click="sendChat()"
+                    :disabled="chatLoading || !chatInput.trim() || !userId.trim()"
+                    class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl px-4 py-2.5 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ── LOGS ────────────────────────────────────────────────── -->
+        <section x-show="activeTab==='logs'" class="fade-in space-y-4">
+          <h2 class="font-semibold text-slate-200">Log Explorer</h2>
+          <!-- Filters -->
+          <div class="flex flex-wrap gap-2 bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <input x-model="logFilter.user_id" placeholder="User ID *"
+                   class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition w-36 placeholder-slate-600"/>
+            <input x-model="logFilter.module" placeholder="Module"
+                   class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition w-28 placeholder-slate-600"/>
+            <select x-model="logFilter.category"
+                    class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition">
+              <option value="">All Categories</option>
+              <option>ERROR</option><option>AUTH</option><option>CRUD</option>
+              <option>QUERY</option><option>API</option><option>SYSTEM</option>
+            </select>
+            <select x-model="logFilter.limit"
+                    class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition w-20">
+              <option>25</option><option>50</option><option>100</option>
+            </select>
+            <button @click="loadLogs()" :disabled="logLoading"
+                    class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+              Search
+            </button>
+          </div>
+          <div x-show="logError" x-transition
+               class="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5"
+               x-text="logError"></div>
+          <div x-show="logLoading" class="flex items-center gap-2 text-sm text-slate-500 py-6 justify-center">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            Loading logs…
+          </div>
+          <div x-show="!logLoading && logs.length===0 && !logError"
+               class="text-sm text-slate-600 text-center py-10">
+            Enter a User ID and press Search.
+          </div>
+          <div class="space-y-2">
+            <template x-for="log in logs" :key="log._id">
+              <div @click="expandedLog = expandedLog===log._id ? null : log._id"
+                   class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 cursor-pointer hover:border-slate-700 transition">
+                <div class="flex items-start gap-3">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded border mt-0.5 shrink-0"
+                        :class="'cat-'+log.category" x-text="log.category||'—'"></span>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm text-slate-200 truncate" x-text="log.description||log.action||'—'"></div>
+                    <div class="text-xs text-slate-500 mt-0.5 flex gap-3 flex-wrap">
+                      <span x-text="log.module||'—'"></span>
+                      <span x-text="new Date(log.timestamp).toLocaleString()"></span>
+                    </div>
+                  </div>
+                  <svg class="w-3.5 h-3.5 text-slate-600 shrink-0 mt-1 transition-transform duration-200"
+                       :class="expandedLog===log._id ? 'rotate-90' : ''"
+                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </div>
+                <div x-show="expandedLog===log._id" x-transition class="mt-3 pt-3 border-t border-slate-800">
+                  <pre class="text-xs text-slate-400 whitespace-pre-wrap font-mono overflow-x-auto scrollbar-thin"
+                       x-text="JSON.stringify(log, null, 2)"></pre>
+                </div>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <!-- ── ENDPOINTS ──────────────────────────────────────────── -->
+        <section x-show="activeTab==='endpoints'" class="fade-in space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-slate-200">Endpoints</h2>
+            <button @click="resetForm(); showModal=true"
+                    class="text-sm bg-blue-600 hover:bg-blue-500 rounded-lg px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Register
+            </button>
+          </div>
+          <div x-show="endpoints.length===0" class="text-sm text-slate-600 text-center py-12">
+            No endpoints registered yet.
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <template x-for="ep in endpoints" :key="ep._id">
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition group">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="font-medium text-sm" x-text="ep.name"></div>
+                    <div class="text-xs text-slate-500 mt-0.5" x-text="ep.description||'No description'"></div>
+                  </div>
+                  <button @click.stop="deleteEndpoint(ep._id)"
+                          class="text-slate-600 hover:text-red-400 transition p-1 rounded shrink-0 opacity-0 group-hover:opacity-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                  <code class="flex-1 text-xs bg-slate-800 rounded-lg px-2 py-1.5 font-mono text-slate-400 truncate" x-text="ep._id"></code>
+                  <button @click="copy(ep._id)" class="text-xs text-slate-500 hover:text-slate-300 transition shrink-0">Copy</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <!-- ── APPS ───────────────────────────────────────────────── -->
+        <section x-show="activeTab==='apps'" class="fade-in space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-slate-200">Apps</h2>
+            <button @click="resetAppForm(); showAppModal=true"
+                    class="text-sm bg-blue-600 hover:bg-blue-500 rounded-lg px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              New App
+            </button>
+          </div>
+          <div x-show="appsList.length===0" class="text-sm text-slate-600 text-center py-12">
+            No apps registered yet.
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <template x-for="ap in appsList" :key="ap._id">
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition group">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-sm flex items-center gap-2 flex-wrap">
+                      <span x-text="ap.name"></span>
+                      <span :class="ap.is_active ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'"
+                            class="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                            x-text="ap.is_active ? 'Active' : 'Inactive'"></span>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-0.5 truncate" x-text="ap.allowed_domain"></div>
+                  </div>
+                  <button @click.stop="deleteApp(ap._id)"
+                          class="text-slate-600 hover:text-red-400 transition p-1 rounded shrink-0 opacity-0 group-hover:opacity-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                  <code class="flex-1 text-xs bg-slate-800 rounded-lg px-2 py-1.5 font-mono text-slate-400 truncate"
+                        x-text="ap.api_key || ap._id"></code>
+                  <button @click="copy(ap.api_key || ap._id)"
+                          class="text-xs text-slate-500 hover:text-slate-300 transition shrink-0">Copy</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <!-- ── TOOLS ──────────────────────────────────────────────── -->
+        <section x-show="activeTab==='tools'" class="fade-in space-y-5">
+          <h2 class="font-semibold text-slate-200">Tools</h2>
+          <!-- AI Summary -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div>
+              <h3 class="font-medium text-sm text-slate-200">AI Summary Generator</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Generate an AI-powered activity summary for a user.</p>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-3">
+              <input x-model="summaryUserId" placeholder="User ID *"
+                     class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition placeholder-slate-600"/>
+              <input x-model.number="summaryDays" type="number" min="1" max="90" placeholder="Days (7)"
+                     class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+              <input x-model="summaryModule" placeholder="Module (optional)"
+                     class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition placeholder-slate-600"/>
+            </div>
+            <button @click="generateSummary()" :disabled="summaryLoading || !summaryUserId.trim()"
+                    class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2">
+              <svg x-show="summaryLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Generate Summary
+            </button>
+            <div x-show="summaryResult" x-transition
+                 class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed"
+                 x-text="summaryResult"></div>
+          </div>
+          <!-- Reindex FAISS -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div>
+              <h3 class="font-medium text-sm text-slate-200">Reindex FAISS</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Rebuild the vector search index from all MongoDB log data.</p>
+            </div>
+            <button @click="reindex()" :disabled="reindexLoading"
+                    class="bg-amber-600/90 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2">
+              <svg x-show="reindexLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Run Reindex
+            </button>
+            <div x-show="reindexResult" x-transition
+                 class="text-sm text-slate-300 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3"
+                 x-text="reindexResult"></div>
+          </div>
+        </section>
+
+      </div><!-- /max-w -->
+    </main>
+
+    <!-- ── Toast ────────────────────────────────────────────────────── -->
+    <div x-show="toast"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 rounded-full px-5 py-2 text-sm shadow-xl z-50 pointer-events-none"
+         x-text="toast"></div>
+
+    <!-- ── Settings Panel (dropdown from navbar) ─────────────────────── -->
+    <div x-show="showSettings" x-transition
+         class="fixed inset-0 z-50 flex items-start justify-end pt-14 pr-2">
+      <div @click.outside="showSettings=false"
+           class="w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 mt-1">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-sm text-slate-200">Connection Settings</h3>
+          <button @click="showSettings=false" class="text-slate-500 hover:text-slate-300 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1.5">API URL</label>
+          <input type="url" x-model="apiUrl"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1.5">API Key</label>
+          <input type="password" x-model="apiKey"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+        </div>
+        <button @click="save(); showToast('Settings saved'); showSettings=false"
+                class="w-full bg-blue-600 hover:bg-blue-500 rounded-xl py-2 text-sm font-medium transition-colors">
+          Save
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Register Endpoint Modal ───────────────────────────────────── -->
+    <div x-show="showModal"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showModal=false">
+      <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <h3 class="font-semibold text-slate-200">Register Endpoint</h3>
+          <button @click="showModal=false" class="text-slate-500 hover:text-slate-300 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto scrollbar-thin">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5">Endpoint Name *</label>
+            <input x-model="form.name"
+                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5">Description</label>
+            <input x-model="form.description"
+                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-2">Field Mapping</label>
+            <div class="space-y-2">
+              <template x-for="f in mappingFields" :key="f.key">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs w-24 text-slate-400 shrink-0 font-mono"
+                        x-text="f.key + (f.required ? ' *' : '')"></span>
+                  <input x-model="form.field_mapping[f.key]" :placeholder="f.example"
+                         class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 transition placeholder-slate-600"/>
+                </div>
+              </template>
+            </div>
+          </div>
+          <!-- Payload preview -->
+          <div class="border-t border-slate-800 pt-4">
+            <label class="block text-xs text-slate-400 mb-1.5">Test JSON Payload</label>
+            <textarea x-model="previewJson" rows="3"
+                      class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500 transition"
+                      placeholder='{"userId":"u1","msg":"login attempt"}'></textarea>
+            <button @click="runPreview()"
+                    class="mt-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+              Test Mapping
+            </button>
+            <div x-show="previewError" class="mt-2 text-xs text-red-400" x-text="previewError"></div>
+            <pre x-show="previewResult"
+                 class="mt-2 text-xs bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-300 overflow-x-auto scrollbar-thin"
+                 x-text="JSON.stringify(previewResult, null, 2)"></pre>
+          </div>
+          <div x-show="regError" x-transition
+               class="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"
+               x-text="regError"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-slate-800 flex items-center justify-end gap-3">
+          <button @click="showModal=false"
+                  class="text-sm text-slate-400 hover:text-slate-200 transition px-3 py-1.5">Cancel</button>
+          <button @click="registerEndpoint()"
+                  :disabled="regLoading || !form.name || !form.field_mapping.user_id"
+                  class="text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-4 py-2 font-medium transition-colors flex items-center gap-2">
+            <svg x-show="regLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Register
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Register App Modal ─────────────────────────────────────────── -->
+    <div x-show="showAppModal"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showAppModal=false">
+      <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <h3 class="font-semibold text-slate-200">Register New App</h3>
+          <button @click="showAppModal=false" class="text-slate-500 hover:text-slate-300 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="p-5 space-y-4">
+          <!-- Success banner with new key -->
+          <div x-show="newAppKey" x-transition
+               class="bg-green-500/10 border border-green-500/20 rounded-xl p-4 space-y-2">
+            <div class="text-xs font-semibold text-green-400">App registered! Copy this API key — it won't be shown again.</div>
+            <div class="flex items-center gap-2">
+              <code class="flex-1 text-xs font-mono bg-slate-900 rounded-lg px-2.5 py-2 text-green-300 break-all"
+                    x-text="newAppKey"></code>
+              <button @click="copy(newAppKey)"
+                      class="text-xs text-slate-400 hover:text-slate-200 shrink-0 transition px-2 py-1 bg-slate-800 rounded-lg">
+                Copy
+              </button>
+            </div>
+          </div>
+          <template x-if="!newAppKey">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">App Name *</label>
+                <input x-model="appForm.name"
+                       class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Allowed Domain *</label>
+                <input x-model="appForm.allowed_domain" placeholder="https://yourapp.com"
+                       class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition placeholder-slate-600"/>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Description</label>
+                <input x-model="appForm.description"
+                       class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Owner Name</label>
+                <input x-model="appForm.owner_name"
+                       class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"/>
+              </div>
+              <div x-show="appRegError" x-transition
+                   class="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"
+                   x-text="appRegError"></div>
+            </div>
+          </template>
+        </div>
+        <div class="px-5 py-4 border-t border-slate-800 flex items-center justify-end gap-3">
+          <button @click="showAppModal=false; resetAppForm()"
+                  class="text-sm text-slate-400 hover:text-slate-200 transition px-3 py-1.5"
+                  x-text="newAppKey ? 'Close' : 'Cancel'"></button>
+          <button x-show="!newAppKey" @click="registerNewApp()"
+                  :disabled="appRegLoading || !appForm.name || !appForm.allowed_domain"
+                  class="text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-4 py-2 font-medium transition-colors flex items-center gap-2">
+            <svg x-show="appRegLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Register
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /isAuthed -->
+
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>

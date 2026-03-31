@@ -1,0 +1,16 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+pymongo==4.8.0
+motor==3.5.1
+pydantic==2.9.1
+pydantic-settings==2.5.2
+python-multipart==0.0.9
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0.post1
+numpy==1.26.4
+transformers==4.44.2
+torch==2.4.1
+httpx==0.27.2
+python-dotenv==1.0.1
+certifi
+aiofiles>=23.2.0
