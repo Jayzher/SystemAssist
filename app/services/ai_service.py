@@ -219,8 +219,10 @@ async def generate_summary(
 
     prompt = {
         "system": (
-            f"You are a log analysis assistant. Provide a detailed activity summary.\n"
-            f"Be specific and descriptive. Reference actual data from the logs.\n\n"
+            f"You are a helpful assistant that explains activity logs in plain, everyday language.\n"
+            f"Write for a non-technical user. Keep the summary easy to understand and avoid jargon, internal system terms, and code-like wording unless absolutely necessary.\n"
+            f"If an event is technical, explain it in simple terms and focus on what happened and why it matters to the user.\n"
+            f"Reference actual data from the logs, but do not sound like an engineer writing a report.\n\n"
             f"Activity period: last {days} day(s)\n"
             f"Total events: {len(recent)}\n"
             f"Modules active: {mod_summary}\n"
@@ -229,12 +231,17 @@ async def generate_summary(
             f"Detailed log entries:\n\n{context}"
         ),
         "messages": [{"role": "user", "content": (
-            "Write a structured summary covering:\n"
-            "1. Activity Overview\n"
-            "2. Key Actions with timestamps\n"
-            "3. Patterns and trends\n"
-            "4. Issues or errors\n"
-            "5. Recommendations"
+            "Write a short, user-friendly summary with this structure:\n"
+            "1. A simple overview of what was happening\n"
+            "2. The most important recent actions, using human-readable dates and times\n"
+            "3. Any problems noticed, explained in plain language\n"
+            "4. A brief note on what the user may want to do next, only if it is genuinely helpful\n\n"
+            "Rules:\n"
+            "- Use short paragraphs or up to 4 bullet points\n"
+            "- Prefer simple words over technical terms\n"
+            "- Do not mention modules, categories, metadata, or internal labels unless needed for clarity\n"
+            "- If there are repeated events, summarize them naturally instead of listing every duplicate\n"
+            "- If there is little activity, say that clearly and simply"
         )}],
     }
 
