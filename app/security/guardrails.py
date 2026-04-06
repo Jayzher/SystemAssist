@@ -43,6 +43,8 @@ def validate_ai_response(response: str) -> str:
         r"token\s*[:=]\s*[A-Za-z0-9._-]{20,}",
     ]
     cleaned = response
+    # Strip leaked model special tokens
+    cleaned = re.sub(r"</?s>|<\|[^|]*\|>|\[/?INST\]", "", cleaned)
     for pattern in sensitive_patterns:
         cleaned = re.sub(pattern, "[REDACTED]", cleaned, flags=re.IGNORECASE)
-    return cleaned
+    return cleaned.strip()

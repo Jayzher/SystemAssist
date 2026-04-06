@@ -125,7 +125,7 @@
     'border-bottom-left-radius:3px;white-space:pre-wrap}' +
 
     /* ── loading dots ── */
-    '.sa-b.ld{display:flex;align-items:center;gap:5px;padding:12px 16px}' +
+    '.sa-ld-dots{display:flex;gap:5px}' +
     '.sa-b.ld span{width:7px;height:7px;border-radius:50%;background:#6366f1;' +
     'animation:sa-db 1.2s infinite ease-in-out}' +
     '.sa-b.ld span:nth-child(2){animation-delay:.18s}' +
@@ -281,8 +281,10 @@
                 : 'Checking\u2026';
     }
 
+    var _lastGoodStatus = null;
+
     async function checkHealth() {
-      setStatus('checking');
+      if (!_lastGoodStatus) setStatus('checking');
       try {
         var url, opts;
         if (cfg.healthUrl) {
@@ -301,9 +303,16 @@
           setStatus('offline'); return;
         }
         var res = await fetch(url, opts);
-        setStatus(res.ok ? 'online' : 'offline');
+        if (res.ok) {
+          _lastGoodStatus = true;
+          setStatus('online');
+        } else if (_lastGoodStatus) {
+          setStatus('online');
+        } else {
+          setStatus('offline');
+        }
       } catch (_) {
-        setStatus('offline');
+        if (!_lastGoodStatus) setStatus('offline');
       }
     }
 
@@ -355,9 +364,9 @@
       wrap.id = 'sa-typing';
       wrap.innerHTML =
         '<div class="sa-b ld">' +
-          '<span></span><span></span><span></span>' +
-          '<span id="sa-elapsed" style="margin-left:7px;font-size:11px;' +
-            'color:#64748b;font-style:normal;letter-spacing:0">thinking\u2026</span>' +
+          '<div class="sa-ld-dots"><span></span><span></span><span></span></div>' +
+          '<span id="sa-elapsed" style="font-size:11px;' +
+            'color:#64748b;letter-spacing:0">thinking\u2026</span>' +
         '</div>';
       msgs.appendChild(wrap);
       msgs.scrollTop = msgs.scrollHeight;

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
         Path(__file__).resolve().parent.parent.parent / "Llama-3.2-3B"
     )
     gguf_model_path: str = str(
-        Path(__file__).resolve().parent.parent.parent / "Llama-3.2-3B" / "llama-3.2-3b-q4_k_m.gguf"
+        Path(__file__).resolve().parent.parent.parent / "Llama-3.2-3B" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
     )
     embedding_model: str = "all-MiniLM-L6-v2"
     faiss_index_path: str = str(

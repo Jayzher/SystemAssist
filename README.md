@@ -35,6 +35,9 @@ python -m scripts.seed_data
 # Start the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+# Kill Server
+kill $(lsof -ti:8001) 2>/dev/null && echo "killed" || echo "nothing on 8001"
+
 # Run the full integration test suite
 python -m scripts.test_chat
 ```

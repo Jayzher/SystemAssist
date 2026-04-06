@@ -4,8 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.services.database import connect_db, close_db
-from app.services.embedding_service import load_index, get_embedding_model
-from app.services.ai_service import _load_model as load_gguf_model
+from app.services.embedding_service import load_index
 from app.middleware.logger import RequestLoggerMiddleware
 from app.api import logs, ai
 from app.api import endpoints
@@ -16,9 +15,7 @@ from app.api import ws
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
-    get_embedding_model()
     load_index()
-    load_gguf_model()
     yield
     await close_db()
 

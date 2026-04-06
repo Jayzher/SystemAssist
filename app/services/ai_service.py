@@ -21,26 +21,48 @@ def _load_model() -> None:
     n_threads = int(os.cpu_count() or 4)
     _llm = Llama(
         model_path=settings.gguf_model_path,
-        n_ctx=1024,
+        n_ctx=4096,
         n_threads=n_threads,
         n_batch=512,
         verbose=False,
     )
 
 
-def generate_text(prompt: str, max_new_tokens: int = 150) -> str:
+def generate_text(prompt, max_new_tokens: int = 150) -> str:
     _load_model()
-    out = _llm(
-        prompt,
-        max_tokens=max_new_tokens,
-        temperature=0.4,
-        top_p=0.9,
-        repeat_penalty=1.3,
-        stop=["Question:", "User:", "Logs:", "\n\n\n", "```"],
-        echo=False,
-    )
-    text = out["choices"][0]["text"].strip()
-    return text
+    if isinstance(prompt, dict):
+        messages = [{"role": "system", "content": prompt["system"]}]
+        messages.extend(prompt["messages"])
+        out = _llm.create_chat_completion(
+            messages=messages,
+            max_tokens=max_new_tokens,
+            temperature=0.3,
+            top_p=0.9,
+            repeat_penalty=1.2,
+        )
+        text = out["choices"][0]["message"]["content"].strip()
+        finish = out["choices"][0].get("finish_reason", "")
+        # If truncated by length, clean up and add follow-up
+        if finish == "length" and text:
+            # Trim to last complete sentence
+            for end in ['. ', '! ', '? ', '.\n', '!\n', '?\n']:
+                idx = text.rfind(end)
+                if idx > len(text) // 3:
+                    text = text[:idx + 1]
+                    break
+            text += "\n\nWould you like me to go into more detail on this?"
+        return text
+    else:
+        out = _llm(
+            prompt,
+            max_tokens=max_new_tokens,
+            temperature=0.3,
+            top_p=0.9,
+            repeat_penalty=1.2,
+            stop=["Question:", "User:"],
+            echo=False,
+        )
+        return out["choices"][0]["text"].strip()
 
 
 def _format_log_context(logs: List[dict], max_logs: int = 20) -> str:
@@ -92,7 +114,15 @@ async def query_logs_with_ai(
     if not allowed_ids:
         return "No activity logs found for this account yet. Once you start using the app, your actions will be recorded and I can help you analyse them."
 
-    results = embedding_search(query, top_k=top_k, allowed_log_ids=allowed_ids)
+    # Enrich vague follow-ups with recent conversation context so the
+    # embedding search retrieves relevant logs instead of random ones.
+    search_query = query
+    if conversation_history:
+        recent = conversation_history[-4:]
+        context_parts = [m.content for m in recent]
+        search_query = " ".join(context_parts) + " " + query
+
+    results = embedding_search(search_query, top_k=top_k, allowed_log_ids=allowed_ids)
 
     if not results:
         # FAISS index may be empty or stale — fall back to the most recent logs
@@ -112,26 +142,30 @@ async def query_logs_with_ai(
         score_map = {log_id: score for log_id, score in results}
         matched_logs.sort(key=lambda l: score_map.get(l["log_id"], 0), reverse=True)
 
-    context = _format_log_context(matched_logs, max_logs=5)
+    context = _format_log_context(matched_logs, max_logs=10)
 
-    history_block = ""
-    if conversation_history:
-        last = conversation_history[-4:] if len(conversation_history) > 4 else conversation_history
-        history_block = (
-            "Previous conversation:\n"
-            + _format_conversation_history(last)
-            + "\n\n"
-        )
-
-    prompt = (
-        f"You are a log assistant. Answer concisely based only on the logs below.\n\n"
-        f"{history_block}"
-        f"Logs:\n{context}\n\n"
-        f"Question: {query}\n"
-        f"Answer:"
+    system_msg = (
+        "You are a helpful AI assistant for a user named after their account. "
+        "You can answer general knowledge questions using your training data. "
+        "When the user asks about their activity, actions, or history, use the activity logs below to give specific answers with dates, times, and details. "
+        "Format dates in a human-readable way (e.g. March 31, 2026 at 10:15 AM). "
+        "Use the conversation history to understand follow-up questions. "
+        "RULES: "
+        "1) Keep answers SHORT — use 3-5 bullet points max, no long lists. "
+        "2) ALWAYS end your response with a question like 'Would you like to know more?' or 'Do you have any other questions?'\n\n"
+        f"Activity Logs:\n{context}"
     )
 
-    raw_response = await asyncio.to_thread(generate_text, prompt, 150)
+    messages = []
+    if conversation_history:
+        last = conversation_history[-6:] if len(conversation_history) > 6 else conversation_history
+        for msg in last:
+            messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": query})
+
+    prompt = {"system": system_msg, "messages": messages}
+
+    raw_response = await asyncio.to_thread(generate_text, prompt, 700)
     return validate_ai_response(raw_response)
 
 
@@ -183,25 +217,26 @@ async def generate_summary(
     cat_summary = ", ".join(f"{k} ({v})" for k, v in sorted(categories.items(), key=lambda x: -x[1]))
     error_summary = f"{len(errors)} error(s) detected" if errors else "No errors detected"
 
-    prompt = (
-        f"You are a log analysis assistant. Provide a detailed activity summary for a user.\n"
-        f"Be specific and descriptive. Reference actual data from the logs.\n\n"
-        f"Activity period: last {days} day(s)\n"
-        f"Total events: {len(recent)}\n"
-        f"Modules active: {mod_summary}\n"
-        f"Categories: {cat_summary}\n"
-        f"Errors: {error_summary}\n\n"
-        f"Detailed log entries:\n\n{context}\n\n"
-        f"Write a structured summary covering:\n"
-        f"1. Activity Overview — what the user has been doing, with specifics\n"
-        f"2. Key Actions — most important actions with timestamps and details\n"
-        f"3. Patterns — recurring behaviors or trends\n"
-        f"4. Issues — errors or anomalies with specifics on what went wrong\n"
-        f"5. Recommendations — actionable suggestions based on the activity\n\n"
-        f"Summary:\n\n"
-        f"1. Activity Overview: "
-    )
+    prompt = {
+        "system": (
+            f"You are a log analysis assistant. Provide a detailed activity summary.\n"
+            f"Be specific and descriptive. Reference actual data from the logs.\n\n"
+            f"Activity period: last {days} day(s)\n"
+            f"Total events: {len(recent)}\n"
+            f"Modules active: {mod_summary}\n"
+            f"Categories: {cat_summary}\n"
+            f"Errors: {error_summary}\n\n"
+            f"Detailed log entries:\n\n{context}"
+        ),
+        "messages": [{"role": "user", "content": (
+            "Write a structured summary covering:\n"
+            "1. Activity Overview\n"
+            "2. Key Actions with timestamps\n"
+            "3. Patterns and trends\n"
+            "4. Issues or errors\n"
+            "5. Recommendations"
+        )}],
+    }
 
     raw_text = await asyncio.to_thread(generate_text, prompt, 512)
-    raw_response = "1. Activity Overview: " + raw_text
-    return validate_ai_response(raw_response)
+    return validate_ai_response(raw_text)

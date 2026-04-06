@@ -105,10 +105,15 @@ def load_index() -> bool:
     global _index, _log_ids, _dimension
     bin_path = settings.faiss_index_path + ".bin"
     ids_path = settings.faiss_index_path + ".ids.json"
-    if os.path.exists(bin_path) and os.path.exists(ids_path):
-        _index = faiss.read_index(bin_path)
-        with open(ids_path, "r") as f:
-            _log_ids = json.load(f)
-        _dimension = _index.d
-        return True
+    if os.path.exists(bin_path) and os.path.getsize(bin_path) > 0 and os.path.exists(ids_path):
+        try:
+            _index = faiss.read_index(bin_path)
+            with open(ids_path, "r") as f:
+                _log_ids = json.load(f)
+            _dimension = _index.d
+            return True
+        except Exception:
+            _index = None
+            _log_ids = []
+            return False
     return False
